@@ -15,7 +15,7 @@ double avg_resp_time=0;
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 // YOUR CODE HERE
-
+#define STACK_SIZE 100000
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -28,7 +28,19 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
        // - make it ready for the execution.
 
        // YOUR CODE HERE
-	
+	   tcb *thread_tcb = malloc(sizeof(tcb));
+	   thread_tcb->t_Id = *thread;
+	   thread_tcb->t_status = READY;
+	   thread_tcb->t_priority = 0;
+	   ucontext_t *thread_ctx;
+	   void *st = malloc(STACK_SIZE);
+	   thread_ctx->uc_link = NULL;
+	   thread_ctx->uc_stack.ss_sp = st;
+	   thread_ctx->uc_stack.ss_size = STACK_SIZE;
+	   thread_ctx->uc_stack.ss_flags = 0;
+	   makecontext(&thread_ctx,(*function),arg);
+	   //enqueue(ruQueue,thread_tcb)
+
     return 0;
 };
 

@@ -18,16 +18,28 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ucontext.h>
 
 typedef uint worker_t;
+
+enum status{
+	RUNNING,
+	READY,
+	BLOCKED
+}status;
 
 typedef struct TCB {
 	/* add important states in a thread control block */
 	// thread Id
+	worker_t t_Id;
 	// thread status
+	enum status t_status;
 	// thread context
+	ucontext_t t_context;
 	// thread stack
+	void *t_stack;
 	// thread priority
+	int t_priority;
 	// And more ...
 
 	// YOUR CODE HERE
@@ -44,7 +56,17 @@ typedef struct worker_mutex_t {
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
 // YOUR CODE HERE
+//LL
+typedef struct t_node{
+	tcb *data;
+	t_node *next;
+} t_node;
 
+//queue
+typedef struct t_queue{
+	t_node *top;
+	t_node *bottom;
+}t_queue;
 
 /* Function Declarations: */
 

@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <ucontext.h>
 
-#define STACK_SIZE SIGSTKSZ
+#define STACK_SIZE 100000
 
 void*  f1withparam(ucontext_t *nctx){
 	puts("Donald- you are threaded\n");
