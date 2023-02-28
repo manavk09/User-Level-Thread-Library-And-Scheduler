@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ucontext.h>
-
 typedef uint worker_t;
 
 enum status{
@@ -35,11 +34,11 @@ typedef struct TCB {
 	// thread status
 	enum status t_status;
 	// thread context
-	ucontext_t t_context;
+	ucontext_t *t_context;
 	// thread stack
 	void *t_stack;
 	// thread priority
-	int t_priority;
+	int t_priority; //highest num is highest priority 
 	// And more ...
 
 	// YOUR CODE HERE

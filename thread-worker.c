@@ -32,13 +32,15 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	   thread_tcb->t_Id = *thread;
 	   thread_tcb->t_status = READY;
 	   thread_tcb->t_priority = 0;
-	   ucontext_t *thread_ctx;
+	   ucontext_t *thread_ctx = malloc(sizeof(ucontext_t));
+	   getcontext(thread_ctx);
 	   void *st = malloc(STACK_SIZE);
 	   thread_ctx->uc_link = NULL;
 	   thread_ctx->uc_stack.ss_sp = st;
 	   thread_ctx->uc_stack.ss_size = STACK_SIZE;
 	   thread_ctx->uc_stack.ss_flags = 0;
-	   makecontext(&thread_ctx,(*function),arg);
+	   makecontext(thread_ctx,*function,arg);
+	   thread_tcb->t_context = thread_ctx;
 	   //enqueue(ruQueue,thread_tcb)
 
     return 0;
