@@ -12,6 +12,11 @@ long tot_cntx_switches=0;
 double avg_turn_time=0;
 double avg_resp_time=0;
 
+t_queue *runQueue;
+t_queue *blockedQueue;
+t_node *currThread;
+
+ucontext_t* scheduler_ctx;
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 // YOUR CODE HERE
@@ -28,6 +33,19 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
        // - make it ready for the execution.
 
        // YOUR CODE HERE
+
+	   //Make scheduler context if it doesn't exist yet
+	   if(scheduler_ctx == NULL){
+		scheduler_ctx = malloc(sizeof(ucontext_t));
+		getcontext(scheduler_ctx);
+		void *schedulerSt = malloc(STACK_SIZE);
+		scheduler_ctx->uc_link = NULL;
+		scheduler_ctx->uc_stack.ss_sp = schedulerSt;
+		scheduler_ctx->uc_stack.ss_size = STACK_SIZE;
+		scheduler_ctx->uc_stack.ss_flags = 0;
+		makecontext(scheduler_ctx, *function,arg);
+	   }
+
 	   tcb *thread_tcb = malloc(sizeof(tcb));
 	   thread_tcb->t_Id = *thread;
 	   thread_tcb->t_status = READY;
@@ -41,10 +59,46 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	   thread_ctx->uc_stack.ss_flags = 0;
 	   makecontext(thread_ctx,*function,arg);
 	   thread_tcb->t_context = thread_ctx;
-	   //enqueue(ruQueue,thread_tcb)
+
+	   if(runQueue == NULL) {
+		runQueue = malloc(sizeof(t_queue));
+	   }
+
+	   if(blockedQueue == NULL){
+		blockedQueue = malloc(sizeof(t_queue));
+	   }
+
+	   t_node* node = malloc(sizeof(t_node));
+	   node->data = thread_tcb;
+	   enqueue(node, runQueue);
 
     return 0;
 };
+
+void enqueue(t_node* node, t_queue* queue) {
+	if(queue->top == NULL) {
+		queue->top = node;
+		queue->bottom = node;
+	}
+	else{
+		queue->bottom->next = node;
+		queue->bottom = node;
+	}
+}
+
+t_node* dequeue(t_queue* queue) {
+	if(queue->top == NULL) {
+        return NULL; // queue is empty
+    }
+    t_node* temp = queue->top;
+    queue->top = queue->top->next;
+    if(queue->top == NULL) {
+        queue->bottom = NULL; // queue is now empty
+    }
+    temp->next = NULL;
+    return temp;
+}
+
 
 /* give CPU possession to other user-level worker threads voluntarily */
 int worker_yield() {
@@ -55,6 +109,9 @@ int worker_yield() {
 
 	// YOUR CODE HERE
 	
+	currThread->data->t_status = READY;
+	swapcontext(currThread->data->t_context, scheduler_ctx);
+
 	return 0;
 };
 
