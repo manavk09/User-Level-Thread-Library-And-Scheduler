@@ -59,6 +59,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	   thread_ctx->uc_stack.ss_flags = 0;
 	   makecontext(thread_ctx,*function,arg);
 	   thread_tcb->t_context = thread_ctx;
+	   thread_tcb->t_stack = st;
 
 	   if(runQueue == NULL) {
 		runQueue = malloc(sizeof(t_queue));
@@ -120,6 +121,19 @@ void worker_exit(void *value_ptr) {
 	// - de-allocate any dynamic memory created when starting this thread
 
 	// YOUR CODE HERE
+	//if value ptr not null set it to the return val
+	//free the tcb structs context space, change status to exited, remove from run queue, 
+	//context statck ptr,context,;
+	free(currThread->data->t_context->uc_stack.ss_sp);
+	free(currThread->data->t_context);
+	free(currThread->data->t_stack);
+	if(value_ptr != NULL){
+		value_ptr = currThread->data->return_val;
+	}
+	free(currThread);
+	//switching to scheduler context
+	setcontext(scheduler_ctx);
+
 };
 
 

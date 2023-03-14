@@ -24,7 +24,7 @@ typedef uint worker_t;
 enum status{
 	RUNNING,
 	READY,
-	BLOCKED
+	BLOCKED,
 }status;
 
 typedef struct TCB {
@@ -40,6 +40,7 @@ typedef struct TCB {
 	// thread priority
 	int t_priority; //highest num is highest priority 
 	// And more ...
+	void *return_val;
 
 	// YOUR CODE HERE
 } tcb; 
