@@ -12,6 +12,8 @@ long tot_cntx_switches=0;
 double avg_turn_time=0;
 double avg_resp_time=0;
 
+
+struct itimerval timer;
 t_queue *runQueue;
 t_queue *blockedQueue;
 t_node *currThread;
@@ -27,62 +29,87 @@ ucontext_t* scheduler_ctx;
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
                       void *(*function)(void*), void * arg) {
 
-       // - create Thread Control Block (TCB)
-       // - create and initialize the context of this worker thread
-       // - allocate space of stack for this thread to run
-       // after everything is set, push this thread into run queue and 
-       // - make it ready for the execution.
+	// - create Thread Control Block (TCB)
+	// - create and initialize the context of this worker thread
+	// - allocate space of stack for this thread to run
+	// after everything is set, push this thread into run queue and 
+	// - make it ready for the execution.
 
-       // YOUR CODE HERE
+	// YOUR CODE HERE
 
-	   //Make scheduler context if it doesn't exist yet
-	   if(scheduler_ctx == NULL){
+	//Make scheduler context if it doesn't exist yet
+	if(scheduler_ctx == NULL){
 		scheduler_ctx = malloc(sizeof(ucontext_t));
-		// getcontext(scheduler_ctx);
+		//getcontext(scheduler_ctx);
 		void *schedulerSt = malloc(STACK_SIZE);
 		scheduler_ctx->uc_link = NULL;
 		scheduler_ctx->uc_stack.ss_sp = schedulerSt;
 		scheduler_ctx->uc_stack.ss_size = STACK_SIZE;
 		scheduler_ctx->uc_stack.ss_flags = 0;
-		makecontext(scheduler_ctx, *function,arg);
-	   }
-	   if(runQueue == NULL) {
+		makecontext(scheduler_ctx, schedule,NULL);
+	}
+	if(runQueue == NULL) {
 		runQueue = malloc(sizeof(t_queue));
-	   }
+	}
 
-	   if(blockedQueue == NULL){
+	if(blockedQueue == NULL){
 		blockedQueue = malloc(sizeof(t_queue));
-	   }
-	   
-	   tcb *main_thread = malloc(sizeof(tcb));
-	   main_thread->t_Id = 0;
-	   main_thread->t_status = RUNNING;
-	   ucontext_t *main_thread_ctx = malloc(sizeof(ucontext_t));
-	   getcontext(main_thread_ctx);
-	   main_thread->t_context = main_thread_ctx;
-	   t_node* node = malloc(sizeof(t_node));
-	   node->data = main_thread;
-	   enqueue(node, runQueue);
+	}
+	
+	if(&timer == NULL){
+		struct sigaction sa;
+		memset (&sa, 0, sizeof (sa));
+		sa.sa_handler = &swap_to_scheduler;
+		sigaction (SIGPROF, &sa, NULL);
+
+		// Create timer struct
+		struct itimerval timer;
+
+		// Set up what the timer should reset to after the timer goes off
+		timer.it_interval.tv_usec = 0; 
+		timer.it_interval.tv_sec = 0;
+
+		// Set up the current timer to go off in 1 second
+		// Note: if both of the following values are zero
+		//       the timer will not be active, and the timer
+		//       will never go off even if you set the interval value
+		timer.it_value.tv_usec = 0;
+		timer.it_value.tv_sec = 1;
+
+		// Set the timer up (start the timer)
+		setitimer(ITIMER_PROF, &timer, NULL);	
+	}
+	
+	
+	tcb *main_thread = malloc(sizeof(tcb));
+	main_thread->t_Id = 0;
+	main_thread->t_status = RUNNING;
+	ucontext_t *main_thread_ctx = malloc(sizeof(ucontext_t));
+	getcontext(main_thread_ctx);
+	main_thread->t_context = main_thread_ctx;
+	t_node* node = malloc(sizeof(t_node));
+	node->data = main_thread;
+	enqueue(node, runQueue);
 
 
 
-	   tcb *thread_tcb = malloc(sizeof(tcb));
-	   thread_tcb->t_Id = *thread;
-	   thread_tcb->t_status = READY;
-	   thread_tcb->t_priority = 0;
-	   ucontext_t *thread_ctx = malloc(sizeof(ucontext_t));
-	//    getcontext(thread_ctx);
-	   void *st = malloc(STACK_SIZE);
-	   thread_ctx->uc_link = NULL;
-	   thread_ctx->uc_stack.ss_sp = st;
-	   thread_ctx->uc_stack.ss_size = STACK_SIZE;
-	   thread_ctx->uc_stack.ss_flags = 0;
-	   makecontext(thread_ctx,*function,arg);
-	   thread_tcb->t_context = thread_ctx;
-	   thread_tcb->t_stack = st;
-	   t_node* node = malloc(sizeof(t_node));
-	   node->data = thread_tcb;
-	   enqueue(node, runQueue);
+	tcb *thread_tcb = malloc(sizeof(tcb));
+	thread_tcb->t_Id = *thread;
+	thread_tcb->t_status = READY;
+	thread_tcb->t_priority = 0;
+	ucontext_t *thread_ctx = malloc(sizeof(ucontext_t));
+	//getcontext(thread_ctx);
+	void *st = malloc(STACK_SIZE);
+	thread_ctx->uc_link = NULL;
+	thread_ctx->uc_stack.ss_sp = st;
+	thread_ctx->uc_stack.ss_size = STACK_SIZE;
+	thread_ctx->uc_stack.ss_flags = 0;
+	makecontext(thread_ctx,*function,arg);
+	thread_tcb->t_context = thread_ctx;
+	thread_tcb->t_stack = st;
+	t_node* node = malloc(sizeof(t_node));
+	node->data = thread_tcb;
+	enqueue(node, runQueue);
 
     return 0;
 };
@@ -109,6 +136,12 @@ t_node* dequeue(t_queue* queue) {
     }
     temp->next = NULL;
     return temp;
+}
+
+void swap_to_scheduler(){
+	ucontext_t *curr;
+	getcontext(curr);
+	swapcontext(curr,scheduler_ctx);
 }
 
 
