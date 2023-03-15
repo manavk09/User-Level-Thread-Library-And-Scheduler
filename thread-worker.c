@@ -19,6 +19,8 @@ t_queue *blockedQueue;
 t_node *currThread;
 
 ucontext_t* scheduler_ctx;
+worker_t id = 0;
+ucontext_t* main_ctx;
 
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
@@ -40,11 +42,11 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	//Make scheduler context if it doesn't exist yet
 	if(scheduler_ctx == NULL){
 		scheduler_ctx = malloc(sizeof(ucontext_t));
-		//getcontext(scheduler_ctx);
-		void *schedulerSt = malloc(STACK_SIZE);
+		getcontext(scheduler_ctx);
 		scheduler_ctx->uc_link = NULL;
-		scheduler_ctx->uc_stack.ss_sp = schedulerSt;
 		scheduler_ctx->uc_stack.ss_size = STACK_SIZE;
+		scheduler_ctx->uc_stack.ss_sp = malloc(STACK_SIZE);
+
 		scheduler_ctx->uc_stack.ss_flags = 0;
 		makecontext(scheduler_ctx,schedule,0);
 	}
@@ -56,61 +58,63 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		blockedQueue = malloc(sizeof(t_queue));
 	}
 	
-	if(&timer == NULL){
-		struct sigaction sa;
-		memset (&sa, 0, sizeof (sa));
-		sa.sa_handler = &swap_to_scheduler;
-		sigaction (SIGPROF, &sa, NULL);
+	// if(&timer == NULL){
+	// 	struct sigaction sa;
+	// 	memset (&sa, 0, sizeof (sa));
+	// 	sa.sa_handler = &swap_to_scheduler;
+	// 	sigaction (SIGPROF, &sa, NULL);
 
-		// Create timer struct
-		struct itimerval timer;
+	// 	// Create timer struct
+	// 	struct itimerval timer;
 
-		// Set up what the timer should reset to after the timer goes off
-		timer.it_interval.tv_usec = 0; 
-		timer.it_interval.tv_sec = 0;
+	// 	// Set up what the timer should reset to after the timer goes off
+	// 	timer.it_interval.tv_usec = 0; 
+	// 	timer.it_interval.tv_sec = 0;
 
-		// Set up the current timer to go off in 1 second
-		// Note: if both of the following values are zero
-		//       the timer will not be active, and the timer
-		//       will never go off even if you set the interval value
-		timer.it_value.tv_usec = 0;
-		timer.it_value.tv_sec = 1;
+	// 	// Set up the current timer to go off in 1 second
+	// 	// Note: if both of the following values are zero
+	// 	//       the timer will not be active, and the timer
+	// 	//       will never go off even if you set the interval value
+	// 	timer.it_value.tv_usec = 0;
+	// 	timer.it_value.tv_sec = 1;
 
-		// Set the timer up (start the timer)
-		setitimer(ITIMER_PROF, &timer, NULL);	
+	// 	// Set the timer up (start the timer)
+	// 	setitimer(ITIMER_PROF, &timer, NULL);	
+	// }
+	
+	if(main_ctx == NULL){
+		tcb *main_thread = malloc(sizeof(tcb));
+		printf("main id %d\n",id);
+		main_thread->t_Id = id++;
+		main_thread->t_status = RUNNING;
+		main_thread->t_context = malloc(sizeof(ucontext_t));
+		getcontext(main_thread->t_context);
+		main_ctx = main_thread->t_context;
+		t_node* node = malloc(sizeof(t_node));
+		node->data = main_thread;
+		enqueue(node, runQueue);
 	}
-	
-	
-	tcb *main_thread = malloc(sizeof(tcb));
-	main_thread->t_Id = 0;
-	main_thread->t_status = RUNNING;
-	ucontext_t *main_thread_ctx = malloc(sizeof(ucontext_t));
-	getcontext(main_thread_ctx);
-	main_thread->t_context = main_thread_ctx;
-	t_node* node = malloc(sizeof(t_node));
-	node->data = main_thread;
-	enqueue(node, runQueue);
-
-
 
 	tcb *thread_tcb = malloc(sizeof(tcb));
-	thread_tcb->t_Id = *thread;
+	printf("thread id %d\n",id);
+	thread_tcb->t_Id = id++;
+	*thread = thread_tcb->t_Id;
 	thread_tcb->t_status = READY;
 	thread_tcb->t_priority = 0;
-	ucontext_t *thread_ctx = malloc(sizeof(ucontext_t));
-	//getcontext(thread_ctx);
-	void *st = malloc(STACK_SIZE);
-	thread_ctx->uc_link = NULL;
-	thread_ctx->uc_stack.ss_sp = st;
-	thread_ctx->uc_stack.ss_size = STACK_SIZE;
-	thread_ctx->uc_stack.ss_flags = 0;
-	makecontext(thread_ctx,(void *)function,1,arg);
-	thread_tcb->t_context = thread_ctx;
-	thread_tcb->t_stack = st;
+	thread_tcb->t_context = malloc(sizeof(ucontext_t));
+	getcontext(thread_tcb->t_context);
+	thread_tcb->t_context->uc_link = NULL;
+	thread_tcb->t_context->uc_stack.ss_size = STACK_SIZE;
+	thread_tcb->t_context->uc_stack.ss_sp = malloc(STACK_SIZE);
+	thread_tcb->t_context->uc_flags = 0;
+	makecontext(thread_tcb->t_context,(void *)function,1,arg);
+
+
 	t_node* thread_node = malloc(sizeof(t_node));
 	thread_node->data = thread_tcb;
+	printf("it got here2");
 	enqueue(thread_node, runQueue);
-
+	printf("it got here3");
     return 0;
 };
 
@@ -217,6 +221,7 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
+	printf("test");
 
 // - schedule policy
 #ifndef MLFQ
