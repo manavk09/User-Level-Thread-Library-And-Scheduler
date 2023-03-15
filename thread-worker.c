@@ -46,7 +46,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		scheduler_ctx->uc_stack.ss_sp = schedulerSt;
 		scheduler_ctx->uc_stack.ss_size = STACK_SIZE;
 		scheduler_ctx->uc_stack.ss_flags = 0;
-		makecontext(scheduler_ctx, schedule,NULL);
+		makecontext(scheduler_ctx,schedule,0);
 	}
 	if(runQueue == NULL) {
 		runQueue = malloc(sizeof(t_queue));
@@ -104,45 +104,19 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	thread_ctx->uc_stack.ss_sp = st;
 	thread_ctx->uc_stack.ss_size = STACK_SIZE;
 	thread_ctx->uc_stack.ss_flags = 0;
-	makecontext(thread_ctx,*function,arg);
+	makecontext(thread_ctx,(void *)function,1,arg);
 	thread_tcb->t_context = thread_ctx;
 	thread_tcb->t_stack = st;
-	t_node* node = malloc(sizeof(t_node));
-	node->data = thread_tcb;
-	enqueue(node, runQueue);
+	t_node* thread_node = malloc(sizeof(t_node));
+	thread_node->data = thread_tcb;
+	enqueue(thread_node, runQueue);
 
     return 0;
 };
 
-void enqueue(t_node* node, t_queue* queue) {
-	if(queue->top == NULL) {
-		queue->top = node;
-		queue->bottom = node;
-	}
-	else{
-		queue->bottom->next = node;
-		queue->bottom = node;
-	}
-}
 
-t_node* dequeue(t_queue* queue) {
-	if(queue->top == NULL) {
-        return NULL; // queue is empty
-    }
-    t_node* temp = queue->top;
-    queue->top = queue->top->next;
-    if(queue->top == NULL) {
-        queue->bottom = NULL; // queue is now empty
-    }
-    temp->next = NULL;
-    return temp;
-}
 
-void swap_to_scheduler(){
-	ucontext_t *curr;
-	getcontext(curr);
-	swapcontext(curr,scheduler_ctx);
-}
+
 
 
 /* give CPU possession to other user-level worker threads voluntarily */
@@ -252,7 +226,6 @@ static void schedule() {
 #endif
 
 }
-
 /* Pre-emptive Shortest Job First (POLICY_PSJF) scheduling algorithm */
 static void sched_psjf() {
 	// - your own implementation of PSJF
@@ -283,4 +256,32 @@ void print_app_stats(void) {
 // Feel free to add any other functions you need
 
 // YOUR CODE HERE
+void swap_to_scheduler(){
+	ucontext_t *curr;
+	getcontext(curr);
+	swapcontext(curr,scheduler_ctx);
+}
+void enqueue(t_node* node, t_queue* queue) {
+	if(queue->top == NULL) {
+		queue->top = node;
+		queue->bottom = node;
+	}
+	else{
+		queue->bottom->next = node;
+		queue->bottom = node;
+	}
+}
+
+t_node* dequeue(t_queue* queue) {
+	if(queue->top == NULL) {
+        return NULL; // queue is empty
+    }
+    t_node* temp = queue->top;
+    queue->top = queue->top->next;
+    if(queue->top == NULL) {
+        queue->bottom = NULL; // queue is now empty
+    }
+    temp->next = NULL;
+    return temp;
+}
 

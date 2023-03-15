@@ -21,6 +21,8 @@
 #include <ucontext.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <string.h>
+
 typedef uint worker_t;
 
 enum status{
@@ -61,7 +63,7 @@ typedef struct worker_mutex_t {
 //LL
 typedef struct t_node{
 	tcb *data;
-	t_node *next;
+	struct t_node *next;
 } t_node;
 
 //queue
@@ -97,6 +99,14 @@ int worker_mutex_unlock(worker_mutex_t *mutex);
 
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex);
+
+t_node* dequeue(t_queue* queue);
+
+void enqueue(t_node* node, t_queue* queue);
+
+void swap_to_scheduler();
+
+static void schedule();
 
 
 /* Function to print global statistics. Do not modify this function.*/
