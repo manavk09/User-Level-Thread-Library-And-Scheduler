@@ -5,9 +5,10 @@
 #include <unistd.h>
 #include <ucontext.h>
 
-#define STACK_SIZE SIGSTKSZ
+#define STACK_SIZE 1024*64
 
-void simplef(){
+void simplef(int x){
+	printf("%d",x);
   puts("Donald- you are threaded\n");
 }
 
@@ -39,9 +40,10 @@ int main(int argc, char **argv) {
 	cctx.uc_stack.ss_flags=0;
 	
 	puts(" about to call make  context");
+	int x = 2;
 	
 	// Setup the context to start running at simplef
-	makecontext(&cctx,(void *)&simplef,0);
+	makecontext(&cctx,(void *)simplef,1,x);
 	puts("Successfully modified context");
 	
 	// Set the current context to run the context that runs simplef	
