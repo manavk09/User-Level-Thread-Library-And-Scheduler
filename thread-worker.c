@@ -18,6 +18,7 @@ t_node *currThread;
 
 ucontext_t* scheduler_ctx;
 
+
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 // YOUR CODE HERE
 #define STACK_SIZE 100000
@@ -37,7 +38,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	   //Make scheduler context if it doesn't exist yet
 	   if(scheduler_ctx == NULL){
 		scheduler_ctx = malloc(sizeof(ucontext_t));
-		getcontext(scheduler_ctx);
+		// getcontext(scheduler_ctx);
 		void *schedulerSt = malloc(STACK_SIZE);
 		scheduler_ctx->uc_link = NULL;
 		scheduler_ctx->uc_stack.ss_sp = schedulerSt;
@@ -45,13 +46,32 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		scheduler_ctx->uc_stack.ss_flags = 0;
 		makecontext(scheduler_ctx, *function,arg);
 	   }
+	   if(runQueue == NULL) {
+		runQueue = malloc(sizeof(t_queue));
+	   }
+
+	   if(blockedQueue == NULL){
+		blockedQueue = malloc(sizeof(t_queue));
+	   }
+	   
+	   tcb *main_thread = malloc(sizeof(tcb));
+	   main_thread->t_Id = 0;
+	   main_thread->t_status = RUNNING;
+	   ucontext_t *main_thread_ctx = malloc(sizeof(ucontext_t));
+	   getcontext(main_thread_ctx);
+	   main_thread->t_context = main_thread_ctx;
+	   t_node* node = malloc(sizeof(t_node));
+	   node->data = main_thread;
+	   enqueue(node, runQueue);
+
+
 
 	   tcb *thread_tcb = malloc(sizeof(tcb));
 	   thread_tcb->t_Id = *thread;
 	   thread_tcb->t_status = READY;
 	   thread_tcb->t_priority = 0;
 	   ucontext_t *thread_ctx = malloc(sizeof(ucontext_t));
-	   getcontext(thread_ctx);
+	//    getcontext(thread_ctx);
 	   void *st = malloc(STACK_SIZE);
 	   thread_ctx->uc_link = NULL;
 	   thread_ctx->uc_stack.ss_sp = st;
@@ -60,15 +80,6 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	   makecontext(thread_ctx,*function,arg);
 	   thread_tcb->t_context = thread_ctx;
 	   thread_tcb->t_stack = st;
-
-	   if(runQueue == NULL) {
-		runQueue = malloc(sizeof(t_queue));
-	   }
-
-	   if(blockedQueue == NULL){
-		blockedQueue = malloc(sizeof(t_queue));
-	   }
-
 	   t_node* node = malloc(sizeof(t_node));
 	   node->data = thread_tcb;
 	   enqueue(node, runQueue);
@@ -121,15 +132,13 @@ void worker_exit(void *value_ptr) {
 	// - de-allocate any dynamic memory created when starting this thread
 
 	// YOUR CODE HERE
-	//if value ptr not null set it to the return val
-	//free the tcb structs context space, change status to exited, remove from run queue, 
-	//context statck ptr,context,;
-	free(currThread->data->t_context->uc_stack.ss_sp);
-	free(currThread->data->t_context);
-	free(currThread->data->t_stack);
 	if(value_ptr != NULL){
 		value_ptr = currThread->data->return_val;
 	}
+	free(currThread->data->t_context->uc_stack.ss_sp);
+	free(currThread->data->t_context);
+	free(currThread->data->t_stack);
+	free(currThread->data);
 	free(currThread);
 	//switching to scheduler context
 	setcontext(scheduler_ctx);
@@ -142,8 +151,9 @@ int worker_join(worker_t thread, void **value_ptr) {
 	
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
-  
+	
 	// YOUR CODE HERE
+	
 	return 0;
 };
 
