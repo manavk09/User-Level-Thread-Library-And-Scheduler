@@ -62,9 +62,8 @@ typedef struct TCB {
 typedef struct worker_mutex_t {
 	/* add something here */
 	worker_t mutex_id;
-	enum mutex_status worker_mutex_status;
-	tcb *holding_thread;
-	
+    enum mutex_status worker_mutex_status;
+    tcb* holding_thread;
 	// YOUR CODE HERE
 } worker_mutex_t;
 
@@ -80,6 +79,7 @@ typedef struct t_node{
 
 //queue
 typedef struct t_queue{
+	int size;
 	t_node *top;
 	t_node *bottom;
 }t_queue;
@@ -114,13 +114,13 @@ int worker_mutex_destroy(worker_mutex_t *mutex);
 
 t_node* dequeue(t_queue* queue);
 
-void enqueue(t_node* node, t_queue* queue);
+void enqueue(tcb* tcb, t_queue* queue);
 
 void swap_to_scheduler();
 
 static void schedule();
 
-void addToEndOfLinkedList(t_node* thread);
+t_node* addToEndOfLinkedList(tcb* thread, t_node* list);
 
 void alertJoinThreads();
 
@@ -128,6 +128,8 @@ t_node* getThread(worker_t id);
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
+
+void printLL(t_node* list);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
