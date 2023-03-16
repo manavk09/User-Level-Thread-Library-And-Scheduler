@@ -19,9 +19,11 @@ t_queue *blockedQueue;
 t_node *currThread;
 
 t_node *threadsList;
+t_node *locked_mutexlst;
 
 ucontext_t* scheduler_ctx;
 worker_t id = 0;
+worker_t mutex_id = 0;
 ucontext_t* main_ctx;
 
 
@@ -201,7 +203,11 @@ int worker_join(worker_t thread, void **value_ptr) {
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
 	//- initialize data structures for this mutex
-
+	worker_mutex_t *curMutex = malloc(sizeof(worker_mutex_t));
+	curMutex->mutex_id = mutex_id++;
+	curMutex->worker_mutex_status = INITIALIZED;
+	curMutex->holding_thread = currThread->data;
+	mutex = curMutex;
 	// YOUR CODE HERE
 	return 0;
 };
@@ -213,6 +219,14 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if the mutex is acquired successfully, enter the critical section
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
+		int found = search(mutex);
+		if(found == 1){//already locked by some other thread so block our cur thread
+			currThread->data->t_status = BLOCKED;
+		}
+		else{
+			mutex->holding_thread = currThread->data;
+			mutex->worker_mutex_status = LOCKED;
+		}
 
         // YOUR CODE HERE
         return 0;
@@ -340,7 +354,7 @@ void addToEndOfLinkedList(t_node* thread){
 		threadsList = thread;
 		return;
 	}
-
+	
 	t_node* temp = threadsList;
 	while(temp->next != NULL) {
 		temp = temp->next;

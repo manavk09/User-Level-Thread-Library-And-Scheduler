@@ -31,6 +31,11 @@ enum status{
 	BLOCKED,
 	EXITED
 }status;
+enum mutex_status{
+	INITIALIZED,
+	LOCKED,
+	UNLOCKED
+}mutex_status;
 
 typedef struct TCB {
 	/* add important states in a thread control block */
@@ -56,7 +61,10 @@ typedef struct TCB {
 /* mutex struct definition */
 typedef struct worker_mutex_t {
 	/* add something here */
-
+	worker_t mutex_id;
+	enum mutex_status worker_mutex_status;
+	tcb *holding_thread;
+	
 	// YOUR CODE HERE
 } worker_mutex_t;
 
