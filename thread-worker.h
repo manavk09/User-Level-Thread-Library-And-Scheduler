@@ -29,6 +29,7 @@ enum status{
 	RUNNING,
 	READY,
 	BLOCKED,
+	EXITED
 }status;
 
 typedef struct TCB {
@@ -45,6 +46,9 @@ typedef struct TCB {
 	int t_priority; //highest num is highest priority 
 	// And more ...
 	void *return_val;
+
+	//ID of thread that this thread is waiting on
+	worker_t t_waitingId;
 
 	// YOUR CODE HERE
 } tcb; 
@@ -108,6 +112,11 @@ void swap_to_scheduler();
 
 static void schedule();
 
+void addToEndOfLinkedList(t_node* thread);
+
+void alertJoinThreads();
+
+t_node* getThread(worker_t id);
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);

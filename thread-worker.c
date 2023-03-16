@@ -18,6 +18,8 @@ t_queue *runQueue;
 t_queue *blockedQueue;
 t_node *currThread;
 
+t_node *threadsList;
+
 ucontext_t* scheduler_ctx;
 worker_t id = 0;
 ucontext_t* main_ctx;
@@ -82,21 +84,23 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	// 	setitimer(ITIMER_PROF, &timer, NULL);	
 	// }
 	
-	if(main_ctx == NULL){
+	if(main_ctx == NULL) {
 		tcb *main_thread = malloc(sizeof(tcb));
-		printf("main id %d\n",id);
+		printf("Worker create: main id %d\n",id);
 		main_thread->t_Id = id++;
 		main_thread->t_status = RUNNING;
 		main_thread->t_context = malloc(sizeof(ucontext_t));
 		getcontext(main_thread->t_context);
 		main_ctx = main_thread->t_context;
-		t_node* node = malloc(sizeof(t_node));
-		node->data = main_thread;
-		enqueue(node, runQueue);
+		t_node* mainNode = malloc(sizeof(t_node));
+		mainNode->data = main_thread;
+		enqueue(mainNode, runQueue);
+		addToEndOfLinkedList(mainNode);
+		currThread = mainNode;
 	}
 
 	tcb *thread_tcb = malloc(sizeof(tcb));
-	printf("thread id %d\n",id);
+	printf("Worker create: thread id %d\n",id);
 	thread_tcb->t_Id = id++;
 	*thread = thread_tcb->t_Id;
 	thread_tcb->t_status = READY;
@@ -109,18 +113,14 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	thread_tcb->t_context->uc_flags = 0;
 	makecontext(thread_tcb->t_context,(void *)function,1,arg);
 
-
 	t_node* thread_node = malloc(sizeof(t_node));
 	thread_node->data = thread_tcb;
-	printf("it got here2");
 	enqueue(thread_node, runQueue);
-	printf("it got here3");
+	//enqueue(mainNode, runQueue);
+	addToEndOfLinkedList(thread_node);
+	//swapcontext(main_ctx, scheduler_ctx);
     return 0;
 };
-
-
-
-
 
 
 /* give CPU possession to other user-level worker threads voluntarily */
@@ -140,31 +140,60 @@ int worker_yield() {
 
 /* terminate a thread */
 void worker_exit(void *value_ptr) {
+	printf("Worker exit: Thread: %d\n", currThread->data->t_Id);
 	// - de-allocate any dynamic memory created when starting this thread
 
 	// YOUR CODE HERE
 	if(value_ptr != NULL){
 		value_ptr = currThread->data->return_val;
 	}
+
+	alertJoinThreads();
+
+	/*
 	free(currThread->data->t_context->uc_stack.ss_sp);
 	free(currThread->data->t_context);
-	free(currThread->data->t_stack);
 	free(currThread->data);
 	free(currThread);
-	//switching to scheduler context
+	*/
+	
+	currThread->data->t_status = EXITED;
+
+	printf("Worker exit end: Thread: %d\n", currThread->data->t_Id);
+	//switching to scheduler 
 	setcontext(scheduler_ctx);
 
 };
 
-
 /* Wait for thread termination */
 int worker_join(worker_t thread, void **value_ptr) {
-	
+	printf("Thread: %d\n", thread);
+	printf("Worker join: Curr Thread: %d, joining thread: %d\n", currThread->data->t_Id, thread);
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
 	
 	// YOUR CODE HERE
 	
+	if(getThread(thread)->data->t_status != EXITED) {
+		enqueue(currThread, blockedQueue);
+		currThread->data->t_waitingId = thread;
+		currThread->data->t_status = BLOCKED;
+		printf("Worker join in not exited: Curr Thread: %d, joining thread: %d\n", currThread->data->t_Id, thread);
+		swapcontext(currThread->data->t_context, scheduler_ctx);
+	}
+	else {
+		if(value_ptr != NULL) {
+			printf("Worker join in exited: Curr Thread: %d, joining thread: %d\n", currThread->data->t_Id, thread);
+			t_node* temp = threadsList;
+			while(temp != NULL) {
+				if(temp->data->t_Id == thread) {
+					value_ptr = temp->data->return_val;
+				}
+				temp = temp->next;
+			}
+		}
+	}
+
 	return 0;
 };
 
@@ -221,8 +250,24 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
-	printf("test");
+	printf("Entered scheduler context\n");
+	printf("%d\n", runQueue->top->data->t_Id);
+	printf("%d\n", runQueue->bottom->data->t_Id);
 
+	while(runQueue->top != NULL){
+		t_node* dequeuedThread = dequeue(runQueue);
+		if(dequeuedThread->data->t_status == BLOCKED) {
+			enqueue(dequeuedThread, runQueue);
+		}
+		else {
+			currThread = dequeuedThread;
+			printf("Boutta swap sche\n");
+			swapcontext(scheduler_ctx, dequeuedThread->data->t_context);
+		}
+		
+	}
+	printf("Exiting scheduler context, queue is empty\n");
+	
 // - schedule policy
 #ifndef MLFQ
 	// Choose PSJF
@@ -290,3 +335,40 @@ t_node* dequeue(t_queue* queue) {
     return temp;
 }
 
+void addToEndOfLinkedList(t_node* thread){
+	if(threadsList == NULL){
+		threadsList = thread;
+		return;
+	}
+
+	t_node* temp = threadsList;
+	while(temp->next != NULL) {
+		temp = temp->next;
+	}
+	temp->next = thread;
+
+}
+
+void alertJoinThreads() {
+	t_node* temp = threadsList;
+	while(temp != NULL){
+		printf("ggsdfg\n");
+		if(temp->data->t_waitingId == currThread->data->t_Id) {
+			temp->data->t_waitingId = -1;
+			temp->data->t_status = READY;
+			enqueue(temp, runQueue);
+		}
+		temp = temp->next;
+	}
+}
+
+t_node* getThread(worker_t id) {
+	t_node* temp = threadsList;
+	while(temp != NULL) {
+		if(temp->data->t_Id == id) {
+			return temp;
+		}
+		temp = temp->next;
+	}
+	return NULL;
+}
