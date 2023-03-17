@@ -142,6 +142,8 @@ void print_app_stats(void);
 
 void printLL(t_node* list);
 
+void printQueue();
+
 #ifdef USE_WORKERS
 #define pthread_t worker_t
 #define pthread_mutex_t worker_mutex_t

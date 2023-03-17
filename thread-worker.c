@@ -222,10 +222,11 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if the mutex is acquired successfully, enter the critical section
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
-		while(isMutexFree(mutex->mutex_id) != 0){
+		while(isMutexFree(mutex->mutex_id) != 1){
 			currTcb->t_status = BLOCKED_MUTEX;
 			currTcb->t_waitingId = mutex->mutex_id;
 			addToEndOfLinkedList(currTcb,blockedList);
+			printf("we stuck\n");
 			swapcontext(currTcb->t_context,scheduler_ctx);
 		}
 
@@ -258,6 +259,8 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 			temp->data->mutex_status = UNLOCKED;
 			temp->data->holding_thread = NULL;
 		}
+		temp = temp->next;
+		printf("we stuck????? nah cuh\n");
 	}
 	alertMutexThreads(mutex->mutex_id);
 	
@@ -295,9 +298,8 @@ static void schedule() {
 
 	// YOUR CODE HERE
 	printf("Entered scheduler context\n");
-	printf("Queue top: %d\n", readyQueue->top->data->t_Id);
-	printf("Queue bottom: %d\n", readyQueue->bottom->data->t_Id);
 	while(readyQueue->top != NULL){
+		printQueue();
 		t_node* dequeuedThread = dequeue(readyQueue);
 		printf("Scheduler dequeued %d\n", dequeuedThread->data->t_Id);
 
@@ -421,7 +423,7 @@ void printQueue() {
 	if(readyQueue->top == NULL) {
 		return;
 	}
-	while(temp->next != NULL) {
+	while(temp != NULL) {
 		printf("Ready Queue: %d\n", temp->data->t_Id);
 		temp = temp->next;
 	}
@@ -442,10 +444,11 @@ void alertJoinThreads() {
 void alertMutexThreads(worker_t mutex_id) {
 	t_node* temp = blockedList;
 	while(temp != NULL){
-		if(temp->data->t_waitingId == currTcb->t_Id && temp->data->t_status == BLOCKED_MUTEX) {
+		if(temp->data->t_waitingId == mutex_id && temp->data->t_status == BLOCKED_MUTEX) {
 			temp->data->t_waitingId = -1;
 			temp->data->t_status = READY;
 			enqueue(temp->data, readyQueue);
+			printf("BITCH\n");
 		}
 		temp = temp->next;
 	}
@@ -466,10 +469,10 @@ int isMutexFree(worker_t mutex_id){
 	while(temp != NULL){
 		if(temp->data->mutex_id == mutex_id){
 			if(temp->data->mutex_status == UNLOCKED || temp->data->mutex_status == INITIALIZED){
-				return 0; //it is free
+				return 1; //it is free
 			}
 			else{
-				return 1; //it is locked
+				return 0; //it is locked
 			}
 		}
 		temp = temp->next;
