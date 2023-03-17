@@ -14,7 +14,6 @@ double avg_resp_time=0;
 
 struct itimerval timer;
 t_queue *readyQueue;
-//t_queue *blockedQueue;
 tcb *currTcb;
 
 t_node *threadsList;
@@ -63,34 +62,33 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	// 	blockedQueue = malloc(sizeof(t_queue));
 	// }
 	
-	// if(&timer == NULL){
-	// 	struct sigaction sa;
-	// 	memset (&sa, 0, sizeof (sa));
-	// 	sa.sa_handler = &swap_to_scheduler;
-	// 	sigaction (SIGPROF, &sa, NULL);
+	if(timer.it_interval.tv_sec != QUANTUM){
+		printf("making timer\n");
+		struct sigaction sa;
+		memset (&sa, 0, sizeof (sa));
+		sa.sa_handler = &swap_to_scheduler;
+		sigaction (SIGPROF, &sa, NULL);
 
-	// 	// Create timer struct
-	// 	struct itimerval timer;
+		// Set up what the timer should reset to after the timer goes off
+		timer.it_interval.tv_usec = 0; 
+		timer.it_interval.tv_sec = QUANTUM;
 
-	// 	// Set up what the timer should reset to after the timer goes off
-	// 	timer.it_interval.tv_usec = 0; 
-	// 	timer.it_interval.tv_sec = 0;
+		// Set up the current timer to go off in 1 second
+		// Note: if both of the following values are zero
+		//       the timer will not be active, and the timer
+		//       will never go off even if you set the interval value
+		timer.it_value.tv_usec = 0;
+		timer.it_value.tv_sec = QUANTUM;
 
-	// 	// Set up the current timer to go off in 1 second
-	// 	// Note: if both of the following values are zero
-	// 	//       the timer will not be active, and the timer
-	// 	//       will never go off even if you set the interval value
-	// 	timer.it_value.tv_usec = 0;
-	// 	timer.it_value.tv_sec = 1;
-
-	// 	// Set the timer up (start the timer)
-	// 	setitimer(ITIMER_PROF, &timer, NULL);	
-	// }
+		// Set the timer up (start the timer)
+		setitimer(ITIMER_PROF, &timer, NULL);	
+	}
 	
 	if(main_ctx == NULL) {
 		tcb *main_tcb = malloc(sizeof(tcb));
 		printf("Worker create: main id %d\n",id);
 		main_tcb->t_Id = id++;
+		main_tcb->t_quantums = 0;
 		main_tcb->t_status = RUNNING;
 		main_tcb->t_context = malloc(sizeof(ucontext_t));
 		getcontext(main_tcb->t_context);
@@ -106,6 +104,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	tcb *thread_tcb = malloc(sizeof(tcb));
 	printf("Worker create: thread id %d\n",id);
 	thread_tcb->t_Id = id++;
+	thread_tcb->t_quantums = 0;
 	*thread = thread_tcb->t_Id;
 	thread_tcb->t_status = READY;
 	thread_tcb->t_priority = 0;
@@ -348,9 +347,12 @@ void print_app_stats(void) {
 
 // YOUR CODE HERE
 void swap_to_scheduler(){
-	ucontext_t *curr;
-	getcontext(curr);
-	swapcontext(curr,scheduler_ctx);
+	printf("timer swap\n");
+	
+	currTcb->t_quantums++;
+	enqueue(currTcb, readyQueue);
+	
+	swapcontext(currTcb->t_context, scheduler_ctx);
 }
 
 void enqueue(tcb* tcb, t_queue* queue) {

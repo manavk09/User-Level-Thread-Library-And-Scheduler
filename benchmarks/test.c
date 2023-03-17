@@ -16,21 +16,27 @@ pthread_mutex_t mutex;
 int foo(){
 	printf("foo\n");
 	int i = 50;
-	pthread_mutex_lock(&mutex);
-	printf("foo locked\n");
-	worker_yield();
-	pthread_mutex_unlock(&mutex);
-	printf("foo unlocked\n");
+	// pthread_mutex_lock(&mutex);
+	// printf("foo locked\n");
+	// worker_yield();
+	// pthread_mutex_unlock(&mutex);
+	// printf("foo unlocked\n");
+	// while(1) {
+	// 	printf("fooing\n");
+	// }
 	pthread_exit(&i);
 }
 
 int bar(){
 	printf("bar\n");
 	int i = 60;
-	pthread_mutex_lock(&mutex);
-	printf("bar locked\n");
-	pthread_mutex_unlock(&mutex);
-	printf("bar unlocked\n");
+	// pthread_mutex_lock(&mutex);
+	// printf("bar locked\n");
+	// pthread_mutex_unlock(&mutex);
+	// printf("bar unlocked\n");
+	// while(1) {
+	// 	printf("barring\n");
+	// }
 	pthread_exit(&i);
 }
 
@@ -41,7 +47,7 @@ int main(int argc, char **argv) {
 	pthread_t barThread;
 	int* fooValue = malloc(sizeof(int));
 	int* barValue = malloc(sizeof(int));
-	pthread_mutex_init(&mutex, NULL);
+	//pthread_mutex_init(&mutex, NULL);
 
 	pthread_create(&fooThread, NULL, &foo, 0);
 	pthread_create(&barThread, NULL, &bar, 0);

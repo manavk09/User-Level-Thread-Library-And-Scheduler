@@ -23,6 +23,8 @@
 #include <signal.h>
 #include <string.h>
 
+#define QUANTUM 1
+
 typedef uint worker_t;
 
 enum status{
@@ -52,6 +54,9 @@ typedef struct TCB {
 	int t_priority; //highest num is highest priority 
 	// And more ...
 	void *return_val;
+
+	//Quantums (Time slices for this thread)
+	int t_quantums;
 
 	//ID of thread that this thread is waiting on
 	worker_t t_waitingId;
