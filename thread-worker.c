@@ -19,6 +19,7 @@ tcb *currTcb;
 
 t_node *threadsList;
 t_node *blockedList;
+t_mutexNode *mutex_list;
 
 ucontext_t* scheduler_ctx;
 worker_t id = 0;
@@ -179,7 +180,7 @@ int worker_join(worker_t thread, void **value_ptr) {
 	if(getThread(thread)->data->t_status != EXITED) {
 		//enqueue(currTcb, blockedQueue);
 		currTcb->t_waitingId = thread;
-		currTcb->t_status = BLOCKED;
+		currTcb->t_status = BLOCKED_JOIN;
 		blockedList = addToEndOfLinkedList(currTcb, blockedList);
 		printf("Worker join in NOT exited: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
 		swapcontext(currTcb->t_context, scheduler_ctx);
@@ -206,8 +207,9 @@ int worker_mutex_init(worker_mutex_t *mutex,
 	//- initialize data structures for this mutex
 	worker_mutex_t *curMutex = malloc(sizeof(worker_mutex_t));
     curMutex->mutex_id = mutex_id++;
-    curMutex->worker_mutex_status = INITIALIZED;
+    curMutex->mutex_status = INITIALIZED;
     curMutex->holding_thread = currTcb;
+	mutex_list = addToEndOfMutexLL(curMutex,mutex_list);
     mutex = curMutex;
 	// YOUR CODE HERE
 	return 0;
@@ -220,18 +222,45 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if the mutex is acquired successfully, enter the critical section
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
+		while(isMutexFree(mutex->mutex_id) != 0){
+			currTcb->t_status = BLOCKED_MUTEX;
+			currTcb->t_waitingId = mutex->mutex_id;
+			addToEndOfLinkedList(currTcb,blockedList);
+			swapcontext(currTcb->t_context,scheduler_ctx);
+		}
 
+		t_mutexNode* temp = mutex_list;
+		while(temp != NULL){
+			if(temp->data->mutex_id == mutex->mutex_id){
+				temp->data->mutex_status = LOCKED;
+				temp->data->holding_thread = currTcb;
+			}
+			temp = temp->next;
+		}
         // YOUR CODE HERE
         return 0;
 };
+
 
 /* release the mutex lock */
 int worker_mutex_unlock(worker_mutex_t *mutex) {
 	// - release mutex and make it available again. 
 	// - put threads in block list to run queue 
 	// so that they could compete for mutex later.
-
+	/*
+		go to it in mutex list unlock
+		alert all waiting thread
+	*/
 	// YOUR CODE HERE
+	t_mutexNode* temp = mutex_list;
+	while(temp != NULL){
+		if(temp->data->mutex_id == mutex->mutex_id){
+			temp->data->mutex_status = UNLOCKED;
+			temp->data->holding_thread = NULL;
+		}
+	}
+	alertMutexThreads(mutex->mutex_id);
+	
 	return 0;
 };
 
@@ -371,6 +400,22 @@ t_node* addToEndOfLinkedList(tcb* tcb, t_node* list){
 	return list;
 }
 
+t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list){
+	t_mutexNode* newNode = malloc(sizeof(t_mutexNode));
+	newNode->data = mutex;
+	if(list == NULL){
+		list = newNode;
+		return list;
+	}
+
+	t_mutexNode* temp = list;
+	while(temp->next != NULL) {
+		temp = temp->next;
+	}
+	temp->next = newNode;
+	return list;
+}
+
 void printQueue() {
 	t_node* temp = readyQueue->top;
 	if(readyQueue->top == NULL) {
@@ -385,7 +430,19 @@ void printQueue() {
 void alertJoinThreads() {
 	t_node* temp = threadsList;
 	while(temp != NULL){
-		if(temp->data->t_waitingId == currTcb->t_Id) {
+		if(temp->data->t_waitingId == currTcb->t_Id && temp->data->t_status == BLOCKED_JOIN) {
+			temp->data->t_waitingId = -1;
+			temp->data->t_status = READY;
+			enqueue(temp->data, readyQueue);
+		}
+		temp = temp->next;
+	}
+}
+
+void alertMutexThreads(worker_t mutex_id) {
+	t_node* temp = blockedList;
+	while(temp != NULL){
+		if(temp->data->t_waitingId == currTcb->t_Id && temp->data->t_status == BLOCKED_MUTEX) {
 			temp->data->t_waitingId = -1;
 			temp->data->t_status = READY;
 			enqueue(temp->data, readyQueue);
@@ -403,4 +460,19 @@ t_node* getThread(worker_t id) {
 		temp = temp->next;
 	}
 	return NULL;
+}
+int isMutexFree(worker_t mutex_id){
+	t_mutexNode* temp = mutex_list;
+	while(temp != NULL){
+		if(temp->data->mutex_id == mutex_id){
+			if(temp->data->mutex_status == UNLOCKED || temp->data->mutex_status == INITIALIZED){
+				return 0; //it is free
+			}
+			else{
+				return 1; //it is locked
+			}
+		}
+		temp = temp->next;
+	}
+	return 1; //locked, but doesnt ever get here
 }

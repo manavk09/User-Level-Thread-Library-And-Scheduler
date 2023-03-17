@@ -32,8 +32,8 @@ int main(int argc, char **argv) {
 	int* fooValue = malloc(sizeof(int));
 	int* barValue = malloc(sizeof(int));
 	
-	pthread_create(&barThread, NULL, &bar, 0);
 	pthread_create(&fooThread, NULL, &foo, 0);
+	pthread_create(&barThread, NULL, &bar, 0);
 	
 	//printf("In main, going to join.\n");
 

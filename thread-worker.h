@@ -28,7 +28,8 @@ typedef uint worker_t;
 enum status{
 	RUNNING,
 	READY,
-	BLOCKED,
+	BLOCKED_JOIN,
+	BLOCKED_MUTEX,
 	EXITED
 }status;
 enum mutex_status{
@@ -55,6 +56,7 @@ typedef struct TCB {
 	//ID of thread that this thread is waiting on
 	worker_t t_waitingId;
 
+
 	// YOUR CODE HERE
 } tcb; 
 
@@ -62,7 +64,7 @@ typedef struct TCB {
 typedef struct worker_mutex_t {
 	/* add something here */
 	worker_t mutex_id;
-    enum mutex_status worker_mutex_status;
+    enum mutex_status mutex_status;
     tcb* holding_thread;
 	// YOUR CODE HERE
 } worker_mutex_t;
@@ -76,7 +78,10 @@ typedef struct t_node{
 	tcb *data;
 	struct t_node *next;
 } t_node;
-
+typedef struct t_mutexNode{
+	worker_mutex_t *data;
+	struct t_mutexNode *next;
+} t_mutexNode;
 //queue
 typedef struct t_queue{
 	int size;
@@ -125,6 +130,12 @@ t_node* addToEndOfLinkedList(tcb* thread, t_node* list);
 void alertJoinThreads();
 
 t_node* getThread(worker_t id);
+
+int isMutexFree(worker_t mutex_id);
+
+t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list);
+
+void alertMutexThreads(worker_t mutex_id);
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
