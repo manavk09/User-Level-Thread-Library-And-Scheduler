@@ -142,6 +142,8 @@ t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list);
 
 void alertMutexThreads(worker_t mutex_id);
 
+void addToReadyQueue(tcb* curTCB, t_queue *queue);
+
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
 

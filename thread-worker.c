@@ -117,7 +117,9 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	makecontext(thread_tcb->t_context, (void *) function, 1, arg);
 
 	//Enqueue thread to context
-	enqueue(thread_tcb, readyQueue);
+	//enqueue(thread_tcb, readyQueue);
+	addToReadyQueue(thread_tcb, readyQueue);
+	printQueue();
 	//enqueue(mainNode, runQueue);
 	threadsList = addToEndOfLinkedList(thread_tcb, threadsList);
 	//swapcontext(main_ctx, scheduler_ctx);
@@ -480,4 +482,34 @@ int isMutexFree(worker_t mutex_id){
 		temp = temp->next;
 	}
 	return 1; //locked, but doesnt ever get here
+}
+void addToReadyQueue(tcb* curTCB, t_queue* queue){
+	t_node* curNode = malloc(sizeof(t_node));
+	curNode->data = curTCB;
+	curNode->next = NULL;
+
+
+	//if queue is empty
+	if(queue->top == NULL) {
+		queue->top = curNode;
+		queue->bottom = curNode;
+		queue->size++;
+	}
+	else{
+	//inserting to the top of queue
+		if(curNode->data->t_quantums <= queue->top->data->t_quantums){
+			curNode->next = queue->top;
+			queue->top = curNode;
+			queue->size++;
+		}
+		else{
+			t_node* temp = queue->top;
+			while(temp->next != NULL && temp->next->data->t_quantums < curNode->data->t_quantums){
+				temp = temp->next;
+			}
+
+			curNode->next = temp->next;
+			temp->next = curNode;
+		}
+	}	
 }
