@@ -20,10 +20,15 @@
 #include <stdlib.h>
 #include <ucontext.h>
 #include <sys/time.h>
+#include <time.h>
 #include <signal.h>
 #include <string.h>
+#include <stdbool.h>
 
-#define QUANTUM 1
+#define QUANTUM 10000
+#define PRIORITY_BOOST_TIME 50000
+#define MLFQ_QUEUES_NUM 3
+#define MLFQ_QUEUES_MOVE_ALL_TOP_TIME 10
 
 typedef uint worker_t;
 
@@ -58,12 +63,17 @@ typedef struct TCB {
 	//Quantums (Time slices for this thread)
 	int t_quantums;
 
+	//Time values
+	//struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+
+	long arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+
 	//ID of thread that this thread is waiting on
 	worker_t t_waitingId;
 
 
 	// YOUR CODE HERE
-} tcb; 
+} tcb;
 
 /* mutex struct definition */
 typedef struct worker_mutex_t {
@@ -150,6 +160,22 @@ void print_app_stats(void);
 void printLL(t_node* list);
 
 void printQueue();
+
+tcb* dequeueMLFQ();
+
+struct timespec getTimeDiff(struct timespec time1, struct timespec time0);
+
+void priorityBoost();
+
+void insertToMLFQ(tcb* thread);
+
+void resumeTimer();
+
+void pauseTimer();
+
+long getMicroseconds(struct timespec timeSpec);
+
+static void sched_mlfq();
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t

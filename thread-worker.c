@@ -13,8 +13,16 @@ double avg_turn_time=0;
 double avg_resp_time=0;
 
 struct itimerval timer;
+struct itimerval zero_timer = {0};
+uint priorityBoostTime = 0;
+uint threadsExited = 0;
+struct timespec timerLastStarted;
+bool isTimerCreated = false;
+
 t_queue *readyQueue;
 tcb *currTcb;
+
+t_queue* mlfq[MLFQ_QUEUES_NUM];
 
 t_node *threadsList;
 t_node *blockedList;
@@ -52,62 +60,70 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		scheduler_ctx->uc_stack.ss_flags = 0;
 		makecontext(scheduler_ctx, schedule, 0);
 	}
+
 	//Create queue of ready threads if it doesn't exist yet
 	if(readyQueue == NULL) {
 		readyQueue = malloc(sizeof(t_queue));
 		readyQueue->size = 0;
 	}
 
-	// if(blockedQueue == NULL){
-	// 	blockedQueue = malloc(sizeof(t_queue));
-	// }
+	//Create MLFQ if it doesn't exist yet
+	if(mlfq[0] == NULL) {
+		for(int i = 0; i < MLFQ_QUEUES_NUM; i++) {
+			//printf("Mallocing MLFQ\n");
+			mlfq[i] = malloc(sizeof(t_queue));
+		}
+	}
 	
-	if(timer.it_interval.tv_sec != QUANTUM){
-		printf("making timer\n");
+	if(!isTimerCreated) {
+		isTimerCreated = true;
+		//printf("Making timer\n");
 		struct sigaction sa;
 		memset (&sa, 0, sizeof (sa));
 		sa.sa_handler = &swap_to_scheduler;
 		sigaction (SIGPROF, &sa, NULL);
 
 		// Set up what the timer should reset to after the timer goes off
-		timer.it_interval.tv_usec = 0; 
-		timer.it_interval.tv_sec = QUANTUM;
+		timer.it_interval.tv_usec = QUANTUM; 
+		timer.it_interval.tv_sec = 0;
 
 		// Set up the current timer to go off in 1 second
 		// Note: if both of the following values are zero
 		//       the timer will not be active, and the timer
 		//       will never go off even if you set the interval value
-		timer.it_value.tv_usec = 0;
-		timer.it_value.tv_sec = QUANTUM;
+		timer.it_value.tv_usec = QUANTUM;
+		timer.it_value.tv_sec = 0;
 
 		// Set the timer up (start the timer)
-		setitimer(ITIMER_PROF, &timer, NULL);	
+		clock_gettime(CLOCK_REALTIME, &timerLastStarted);
+		setitimer(ITIMER_PROF, &timer, NULL);
 	}
 	
 	if(main_ctx == NULL) {
 		tcb *main_tcb = malloc(sizeof(tcb));
-		printf("Worker create: main id %d\n",id);
+		//printf("Worker create: main id %d\n",id);
 		main_tcb->t_Id = id++;
 		main_tcb->t_quantums = 0;
 		main_tcb->t_status = RUNNING;
+		main_tcb->t_priority = MLFQ_QUEUES_NUM - 1;
 		main_tcb->t_context = malloc(sizeof(ucontext_t));
 		getcontext(main_tcb->t_context);
 		main_ctx = main_tcb->t_context;
-		//t_node* mainNode = malloc(sizeof(t_node));
-		//mainNode->data = main_tcb;
-		//enqueue(main_tcb, readyQueue);
+		struct timespec currentTime;
+		clock_gettime(CLOCK_REALTIME, &(currentTime));
+		main_tcb->arrivalTime = getMicroseconds(currentTime);
 		threadsList = addToEndOfLinkedList(main_tcb, threadsList);
 		currTcb = main_tcb;
 	}
 
 	//Create new thread and context
 	tcb *thread_tcb = malloc(sizeof(tcb));
-	printf("Worker create: thread id %d\n",id);
+	//printf("Worker create: thread id %d\n",id);
 	thread_tcb->t_Id = id++;
 	thread_tcb->t_quantums = 0;
 	*thread = thread_tcb->t_Id;
 	thread_tcb->t_status = READY;
-	thread_tcb->t_priority = 0;
+	thread_tcb->t_priority = MLFQ_QUEUES_NUM - 1;
 	thread_tcb->t_context = malloc(sizeof(ucontext_t));
 	getcontext(thread_tcb->t_context);
 	thread_tcb->t_context->uc_link = NULL;
@@ -116,10 +132,20 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 	thread_tcb->t_context->uc_flags = 0;
 	makecontext(thread_tcb->t_context, (void *) function, 1, arg);
 
+	//Set arrival time of this new thread
+	//clock_gettime(CLOCK_REALTIME, &(thread_tcb->arrivalTime));
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &(currentTime));
+	thread_tcb->arrivalTime = getMicroseconds(currentTime);
+
 	//Enqueue thread to context
 	//enqueue(thread_tcb, readyQueue);
-	addToReadyQueue(thread_tcb, readyQueue);
-	printQueue();
+	#ifdef MLFQ
+		insertToMLFQ(thread_tcb);
+	#else
+		addToReadyQueue(thread_tcb, readyQueue);
+	#endif
+	//printQueue();
 	//enqueue(mainNode, runQueue);
 	threadsList = addToEndOfLinkedList(thread_tcb, threadsList);
 	//swapcontext(main_ctx, scheduler_ctx);
@@ -135,9 +161,26 @@ int worker_yield() {
 	// - switch from thread context to scheduler context
 
 	// YOUR CODE HERE
-	
+
+	//Pause Timer
+	pauseTimer();
+
+	//Update runtime of thread
+	// clock_gettime(CLOCK_REALTIME, &(currTcb->lastEnd));
+	// struct timespec lastRunTime = getTimeDiff(currTcb->lastEnd, currTcb->lastStart);
+	// currTcb->timeSinceQuantum.tv_nsec += lastRunTime.tv_nsec;
+	// currTcb->timeSinceQuantum.tv_sec += lastRunTime.tv_sec;
+
+	//Update runtime of thread (WITH LONGS);
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &(currentTime));
+	currTcb->lastEnd = getMicroseconds(currentTime);
+	long lastRunTime = currTcb->lastEnd - currTcb->lastStart;
+	currTcb->timeSinceQuantum += lastRunTime;
+
 	currTcb->t_status = READY;
-	enqueue(currTcb, readyQueue);
+	//enqueue(currTcb, readyQueue);
+	tot_cntx_switches++;
 	swapcontext(currTcb->t_context, scheduler_ctx);
 
 	return 0;
@@ -145,11 +188,23 @@ int worker_yield() {
 
 /* terminate a thread */
 void worker_exit(void *value_ptr) {
-	printf("Worker exit: Thread: %d\n", currTcb->t_Id);
+	//Pause Timer
+	pauseTimer();
+
+	//Set turnaround time
+	// clock_gettime(CLOCK_REALTIME, &(currTcb->turnaroundTime));
+	// currTcb->turnaroundTime = getTimeDiff(currTcb->turnaroundTime, currTcb->arrivalTime);
+
+	//Set turnaround time
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &(currentTime));
+	currTcb->turnaroundTime = getMicroseconds(currentTime) - currTcb->arrivalTime;
+
+	//printf("Worker exit: Thread: %d\n", currTcb->t_Id);
 	// - de-allocate any dynamic memory created when starting this thread
 
 	// YOUR CODE HERE
-	if(value_ptr != NULL){
+	if(value_ptr != NULL) {
 		currTcb->return_val = value_ptr;
 	}
 
@@ -163,16 +218,28 @@ void worker_exit(void *value_ptr) {
 	*/
 	
 	currTcb->t_status = EXITED;
+	threadsExited++;
 
-	printf("Worker exit end: Thread: %d\n", currTcb->t_Id);
+	//("Worker exit end: Thread: %d\n", currTcb->t_Id);
+
+	//Adjust bechmarking statistics (once main is finished)
+	//printf("Thread %d turnaround time: %ld\n", currTcb->t_Id, currTcb->turnaroundTime);
+	// avg_resp_time += currTcb->responseTime;
+	// avg_turn_time += currTcb->turnaroundTime;
+	avg_resp_time = (avg_resp_time * (threadsExited - 1) + currTcb->responseTime) / threadsExited;
+	avg_turn_time = (avg_turn_time * (threadsExited - 1) + currTcb->turnaroundTime) / threadsExited;
 	//switching to scheduler 
+	tot_cntx_switches++;
 	setcontext(scheduler_ctx);
 
 };
 
 /* Wait for thread termination */
 int worker_join(worker_t thread, void **value_ptr) {
-	printf("Worker join: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
+	//Pause Timer
+	pauseTimer();
+
+	//printf("Worker join: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
 	
@@ -183,11 +250,12 @@ int worker_join(worker_t thread, void **value_ptr) {
 		currTcb->t_waitingId = thread;
 		currTcb->t_status = BLOCKED_JOIN;
 		blockedList = addToEndOfLinkedList(currTcb, blockedList);
-		printf("Worker join in NOT exited: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
+		//printf("Worker join in NOT exited: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
+		tot_cntx_switches++;
 		swapcontext(currTcb->t_context, scheduler_ctx);
 	}
 	if(value_ptr != NULL) {
-		printf("Worker join in exited: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
+		//printf("Worker join in exited: Curr Thread: %d, joining thread: %d\n", currTcb->t_Id, thread);
 		t_node* temp = threadsList;
 		printLL(threadsList);
 		while(temp != NULL) {
@@ -205,6 +273,8 @@ int worker_join(worker_t thread, void **value_ptr) {
 /* initialize the mutex lock */
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
+	//Pause Timer
+	pauseTimer();
 	//- initialize data structures for this mutex
 	worker_mutex_t *curMutex = malloc(sizeof(worker_mutex_t));
     curMutex->mutex_id = mutex_id++;
@@ -213,6 +283,7 @@ int worker_mutex_init(worker_mutex_t *mutex,
 	mutex_list = addToEndOfMutexLL(curMutex,mutex_list);
     mutex = curMutex;
 	// YOUR CODE HERE
+	resumeTimer();
 	return 0;
 };
 
@@ -223,11 +294,16 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if the mutex is acquired successfully, enter the critical section
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
+
+		//Pause Timer
+		pauseTimer();
+
 		while(isMutexFree(mutex->mutex_id) != 1){
 			currTcb->t_status = BLOCKED_MUTEX;
 			currTcb->t_waitingId = mutex->mutex_id;
 			addToEndOfLinkedList(currTcb,blockedList);
-			printf("we stuck\n");
+			//printf("we stuck\n");
+			tot_cntx_switches++;
 			swapcontext(currTcb->t_context,scheduler_ctx);
 		}
 
@@ -239,6 +315,7 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
 			}
 			temp = temp->next;
 		}
+		resumeTimer();
         // YOUR CODE HERE
         return 0;
 };
@@ -254,6 +331,9 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 		alert all waiting thread
 	*/
 	// YOUR CODE HERE
+	//Pause Timer
+	pauseTimer();
+
 	t_mutexNode* temp = mutex_list;
 	while(temp != NULL){
 		if(temp->data->mutex_id == mutex->mutex_id){
@@ -261,25 +341,28 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 			temp->data->holding_thread = NULL;
 		}
 		temp = temp->next;
-		printf("we stuck????? nah cuh\n");
+		//printf("we stuck????? nah cuh\n");
 	}
 	alertMutexThreads(mutex->mutex_id);
-	
+	resumeTimer();
+
 	return 0;
 };
 
 
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
+	pauseTimer();
 	// - de-allocate dynamic memory created in worker_mutex_init
 
+	resumeTimer();
 	return 0;
 };
 
 void printLL(t_node* list) {
 	t_node* temp = list;
 	while(temp != NULL) {
-		printf("Threads List: %d\n", temp->data->t_Id);
+		//printf("Threads List: %d\n", temp->data->t_Id);
 		temp = temp->next;
 	}
 }
@@ -292,39 +375,51 @@ static void schedule() {
 
 	// - invoke scheduling algorithms according to the policy (PSJF or MLFQ)
 
-	// if (sched == PSJF)
-	//		sched_psjf();
-	// else if (sched == MLFQ)
-	// 		sched_mlfq();
-
 	// YOUR CODE HERE
-	printf("Entered scheduler context\n");
-	while(readyQueue->top != NULL){
-		printQueue();
-		t_node* dequeuedThread = dequeue(readyQueue);
-		printf("Scheduler dequeued %d\n", dequeuedThread->data->t_Id);
+	// printf("Entered scheduler context\n");
+	// while(readyQueue->top != NULL){
+	// 	printQueue();
+	// 	t_node* dequeuedThread = dequeue(readyQueue);
+	// 	printf("Scheduler dequeued %d\n", dequeuedThread->data->t_Id);
 
-		currTcb = dequeuedThread->data;
-		printf("Swapping to thread context %d\n", dequeuedThread->data->t_Id);
-		swapcontext(scheduler_ctx, dequeuedThread->data->t_context);
+	// 	currTcb = dequeuedThread->data;
+	// 	printf("Swapping to thread context %d\n", dequeuedThread->data->t_Id);
+	// 	tot_cntx_switches++;
+	// 	swapcontext(scheduler_ctx, dequeuedThread->data->t_context);
 		
-	}
-	printf("Exiting scheduler context, queue is empty\n");
+	// }
+	// printf("Exiting scheduler context, queue is empty\n");
 	
 // - schedule policy
 #ifndef MLFQ
 	// Choose PSJF
+	sched_psjf();
 #else 
 	// Choose MLFQ
+	sched_mlfq();
 #endif
 
 }
+
 /* Pre-emptive Shortest Job First (POLICY_PSJF) scheduling algorithm */
 static void sched_psjf() {
 	// - your own implementation of PSJF
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
+	//printf("Entered scheduler psjf context\n");
+    while(readyQueue->top != NULL) {
+        printQueue(readyQueue);
+        t_node* dequeuedThread = dequeue(readyQueue);
+        //printf("Scheduler dequeued %d\n", dequeuedThread->data->t_Id);
+
+        currTcb = dequeuedThread->data;
+        //printf("Swapping to thread context %d\n", dequeuedThread->data->t_Id);
+		tot_cntx_switches++;
+        swapcontext(scheduler_ctx, dequeuedThread->data->t_context);
+
+    }
+    //printf("Exiting scheduler context, queue is empty\n");
 }
 
 
@@ -334,6 +429,54 @@ static void sched_mlfq() {
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
+	
+	while(1) {
+		//printQueue();
+		//printf("IN MLFQ SCHED\n");
+		//First check the quantum of the current thread (the one that was running before scheduler
+		//was called) and update it's priority accordingly
+		if(currTcb->t_status == READY) {
+			insertToMLFQ(currTcb);
+		}
+
+		if(priorityBoostTime >= PRIORITY_BOOST_TIME) {
+			priorityBoost();
+			priorityBoostTime = 0;
+		}
+
+		tcb* nextThreadToRun = dequeueMLFQ();
+		if(nextThreadToRun == NULL) {
+			//printf("Dequeued NULL, scheduler is empty\n");
+			nextThreadToRun = currTcb;
+		}
+		currTcb = nextThreadToRun;
+
+		//printf("Dequeued in scheduler thread: %d\n", nextThreadToRun->t_Id);
+		if(nextThreadToRun->responseTime == 0) {
+			struct timespec currentTime;
+			clock_gettime(CLOCK_REALTIME, &(currentTime));
+			nextThreadToRun->responseTime = getMicroseconds(currentTime) - nextThreadToRun->arrivalTime;
+		}
+		tot_cntx_switches++;
+		resumeTimer();
+		swapcontext(scheduler_ctx, nextThreadToRun->t_context);
+
+		// printf("Dequeued in scheduler thread: %d\n", nextThreadToRun->t_Id);
+		// currTcb = nextThreadToRun;
+		// if(nextThreadToRun->responseTime.tv_nsec == 0 && nextThreadToRun->responseTime.tv_sec == 0) {
+		// 	clock_gettime(CLOCK_REALTIME, &(nextThreadToRun->responseTime));
+		// 	nextThreadToRun->responseTime = getTimeDiff(nextThreadToRun->responseTime, nextThreadToRun->arrivalTime);
+		// }
+		// tot_cntx_switches++;
+		// resumeTimer();
+		// swapcontext(scheduler_ctx, nextThreadToRun->t_context);
+		
+	}
+
+}
+
+long getMicroseconds(struct timespec timeSpec) {
+	return timeSpec.tv_sec*1000000 + timeSpec.tv_nsec/1000;
 }
 
 //DO NOT MODIFY THIS FUNCTION
@@ -349,11 +492,26 @@ void print_app_stats(void) {
 
 // YOUR CODE HERE
 void swap_to_scheduler(){
-	printf("timer swap\n");
-	
-	currTcb->t_quantums++;
-	enqueue(currTcb, readyQueue);
-	
+	//Pause Timer
+	//printf("Timer ring, in swap_to_scheduler\n");
+	pauseTimer();
+
+	//Update runtime of thread
+	// clock_gettime(CLOCK_REALTIME, &(currTcb->lastEnd));
+	// struct timespec lastRunTime = getTimeDiff(currTcb->lastEnd, currTcb->lastStart);
+	// currTcb->timeSinceQuantum.tv_nsec += lastRunTime.tv_nsec;
+	// currTcb->timeSinceQuantum.tv_sec += lastRunTime.tv_sec;
+
+	//Update runtime of thread (WITH LONGS);
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &(currentTime));
+	currTcb->lastEnd = getMicroseconds(currentTime);
+	long lastRunTime = currTcb->lastEnd - currTcb->lastStart;
+	currTcb->timeSinceQuantum += lastRunTime;
+
+	//currTcb->t_quantums++;
+	//enqueue(currTcb, readyQueue);
+	tot_cntx_switches++;
 	swapcontext(currTcb->t_context, scheduler_ctx);
 }
 
@@ -422,13 +580,14 @@ t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list){
 	return list;
 }
 
-void printQueue() {
-	t_node* temp = readyQueue->top;
-	if(readyQueue->top == NULL) {
+void printQueue(t_queue* queue) {
+	//printf("Printing Queue Size: %d\n", queue->size);
+	t_node* temp = queue->top;
+	if(queue->top == NULL) {
 		return;
 	}
 	while(temp != NULL) {
-		printf("Ready Queue: %d\n", temp->data->t_Id);
+		//printf("Printing Queue: %d\n", temp->data->t_Id);
 		temp = temp->next;
 	}
 }
@@ -439,7 +598,15 @@ void alertJoinThreads() {
 		if(temp->data->t_waitingId == currTcb->t_Id && temp->data->t_status == BLOCKED_JOIN) {
 			temp->data->t_waitingId = -1;
 			temp->data->t_status = READY;
-			enqueue(temp->data, readyQueue);
+			#ifndef MLFQ
+				// Choose PSJF
+				addToReadyQueue(temp->data, readyQueue);
+			#else 
+				// Choose MLFQ
+				//insert(temp->data, readyQueue);
+				insertToMLFQ(temp->data);
+			#endif
+			
 		}
 		temp = temp->next;
 	}
@@ -451,8 +618,13 @@ void alertMutexThreads(worker_t mutex_id) {
 		if(temp->data->t_waitingId == mutex_id && temp->data->t_status == BLOCKED_MUTEX) {
 			temp->data->t_waitingId = -1;
 			temp->data->t_status = READY;
-			enqueue(temp->data, readyQueue);
-			printf("BITCH\n");
+			#ifndef MLFQ
+				// Choose PSJF
+				addToReadyQueue(temp->data, readyQueue);
+			#else 
+				// Choose MLFQ
+				insertToMLFQ(temp->data);
+			#endif
 		}
 		temp = temp->next;
 	}
@@ -468,6 +640,7 @@ t_node* getThread(worker_t id) {
 	}
 	return NULL;
 }
+
 int isMutexFree(worker_t mutex_id){
 	t_mutexNode* temp = mutex_list;
 	while(temp != NULL){
@@ -483,6 +656,7 @@ int isMutexFree(worker_t mutex_id){
 	}
 	return 1; //locked, but doesnt ever get here
 }
+
 void addToReadyQueue(tcb* curTCB, t_queue* queue){
 	t_node* curNode = malloc(sizeof(t_node));
 	curNode->data = curTCB;
@@ -512,4 +686,74 @@ void addToReadyQueue(tcb* curTCB, t_queue* queue){
 			temp->next = curNode;
 		}
 	}	
+}
+
+void pauseTimer() {
+	// timer.it_value.tv_sec = 0;
+	// timer.it_value.tv_usec = 0;
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	priorityBoostTime += getMicroseconds(currentTime) -  getMicroseconds(timerLastStarted);
+	setitimer(ITIMER_PROF, &zero_timer, &timer);
+}
+
+void resumeTimer() {
+	// timer.it_value.tv_sec = timer_sec;
+	// timer.it_value.tv_usec = timer_usec;
+	clock_gettime(CLOCK_REALTIME, &timerLastStarted);
+	setitimer(ITIMER_PROF, &timer, NULL);
+}
+
+void insertToMLFQ(tcb* thread) {
+	int currLevel = MLFQ_QUEUES_NUM - 1;
+	//Check if this thread used it's time quantum
+	if(thread->timeSinceQuantum >= QUANTUM) {
+		//printf("insertToMLFQ: in quantum finished\n");
+		//If it has, insert it into the next lower priority queue
+		//and reset it's timeSinceQuantum, lastStart, and lastEnd
+		thread->t_priority == 0 ? enqueue(thread, mlfq[0]) : enqueue(thread, mlfq[thread->t_priority - 1]);
+		thread->t_priority == 0 ? thread->t_priority = 0 : thread->t_priority--;
+		thread->t_quantums++;
+		thread->timeSinceQuantum = 0;
+		thread->lastStart = 0;
+		thread->lastEnd = 0;
+	}
+	//If it hasn't, insert it to the end of the same priority queue
+	else {
+		//printf("insertToMLFQ: in quantum NOT finished. Inserting thread: %d, priority: %d\n", thread->t_Id, thread->t_priority);
+		enqueue(thread, mlfq[thread->t_priority]);
+		//printf("Printing Queue After Insert MLFQ Inserted\n");
+		printQueue(mlfq[2]);
+
+	}
+}
+
+tcb* dequeueMLFQ() {
+	int currLevel = MLFQ_QUEUES_NUM - 1;
+
+	for(currLevel; currLevel >= 0; currLevel--) {
+		if(mlfq[currLevel]->size != 0) {
+			return dequeue(mlfq[currLevel])->data;
+		}
+		//t_node* curr = mlfq[currLevel]->top;
+		// while(curr != NULL) {
+		// 	if(curr->data->t_status == READY) {
+		// 		return curr->data;
+		// 	}
+		// 	curr = curr->next;
+		// }
+	}
+	return NULL;
+}
+
+void priorityBoost() {
+	int currLevel = MLFQ_QUEUES_NUM - 2;
+
+	for(currLevel; currLevel >= 0; currLevel--) {
+		while(mlfq[currLevel]->size != 0) {
+			t_node* curr = dequeue(mlfq[currLevel]);
+			curr->data->t_priority = MLFQ_QUEUES_NUM - 1;
+			enqueue(curr->data, mlfq[MLFQ_QUEUES_NUM - 1]);
+		}
+	}
 }

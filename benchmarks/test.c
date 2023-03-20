@@ -13,8 +13,10 @@
 
 pthread_mutex_t mutex;
 
-int foo(){
-	printf("foo\n");
+int foo() {
+	//printf("foo\n");
+	sleep(5);
+	//printf("foo woke up\n");
 	int i = 50;
 	// pthread_mutex_lock(&mutex);
 	// printf("foo locked\n");
@@ -22,20 +24,22 @@ int foo(){
 	// pthread_mutex_unlock(&mutex);
 	// printf("foo unlocked\n");
 	// while(1) {
-	// 	printf("fooing\n");
+	// 	//printf("fooing\n");
 	// }
 	pthread_exit(&i);
 }
 
 int bar(){
-	printf("bar\n");
+	//printf("bar\n");
 	int i = 60;
+	sleep(5);
+	//printf("bar woke up\n");
 	// pthread_mutex_lock(&mutex);
 	// printf("bar locked\n");
 	// pthread_mutex_unlock(&mutex);
 	// printf("bar unlocked\n");
 	// while(1) {
-	// 	printf("barring\n");
+	// 	//printf("barring\n");
 	// }
 	pthread_exit(&i);
 }
@@ -55,9 +59,10 @@ int main(int argc, char **argv) {
 	//printf("In main, going to join.\n");
 
 	pthread_join(fooThread, (void *) &fooValue);
-	printf("Foo join done in main\n");
+	//printf("Foo join done in main\n");
 	pthread_join(barThread, (void *) &barValue);
-	printf("Foo value: %d, Bar value: %d\n", *fooValue, *barValue);
+	//printf("Foo value: %d, Bar value: %d\n", *fooValue, *barValue);
+	print_app_stats();
 
 	return 0;
 }
