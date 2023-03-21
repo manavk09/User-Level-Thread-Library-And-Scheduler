@@ -177,6 +177,8 @@ long getMicroseconds(struct timespec timeSpec);
 
 static void sched_mlfq();
 
+static void sched_psjf();
+
 #ifdef USE_WORKERS
 #define pthread_t worker_t
 #define pthread_mutex_t worker_mutex_t

@@ -354,7 +354,28 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 int worker_mutex_destroy(worker_mutex_t *mutex) {
 	pauseTimer();
 	// - de-allocate dynamic memory created in worker_mutex_init
-
+	t_mutexNode* curr = mutex_list;
+	//t_mutexNode* prev = mutex_list;
+	if(curr->data->mutex_id == mutex->mutex_id){
+		mutex_list = curr->next;
+		//doo the free stuff
+		free(curr);
+		resumeTimer();
+		return 0;
+	}
+	while(curr->next != NULL){
+		if(curr->next->data->mutex_id == mutex->mutex_id){
+			t_mutexNode* temp = curr->next;
+			curr->next = curr->next->next;
+			//free the stuff
+			free(temp);
+			break;
+		}
+		else{
+			curr = curr->next;
+		}
+	}
+	
 	resumeTimer();
 	return 0;
 };
@@ -408,16 +429,32 @@ static void sched_psjf() {
 
 	// YOUR CODE HERE
 	//printf("Entered scheduler psjf context\n");
-    while(readyQueue->top != NULL) {
-        printQueue(readyQueue);
+    while(1) {
+        //printQueue(readyQueue);
+		if(currTcb->timeSinceQuantum >= QUANTUM){
+			currTcb->t_quantums++;
+		}
+	
+		if(currTcb->t_status == READY){
+			addToReadyQueue(currTcb,readyQueue);
+		}
         t_node* dequeuedThread = dequeue(readyQueue);
         //printf("Scheduler dequeued %d\n", dequeuedThread->data->t_Id);
+		if(dequeuedThread == NULL) {
+			//printf("Dequeued NULL, scheduler is empty\n");
+			dequeuedThread->data = currTcb;
+		}
+		if(dequeuedThread->data->responseTime == 0) {
+			struct timespec currentTime;
+			clock_gettime(CLOCK_REALTIME, &(currentTime));
+			dequeuedThread->data->responseTime = getMicroseconds(currentTime) - dequeuedThread->data->arrivalTime;
+		}
 
         currTcb = dequeuedThread->data;
         //printf("Swapping to thread context %d\n", dequeuedThread->data->t_Id);
 		tot_cntx_switches++;
+		resumeTimer();
         swapcontext(scheduler_ctx, dequeuedThread->data->t_context);
-
     }
     //printf("Exiting scheduler context, queue is empty\n");
 }
@@ -667,14 +704,12 @@ void addToReadyQueue(tcb* curTCB, t_queue* queue){
 	if(queue->top == NULL) {
 		queue->top = curNode;
 		queue->bottom = curNode;
-		queue->size++;
 	}
 	else{
 	//inserting to the top of queue
 		if(curNode->data->t_quantums <= queue->top->data->t_quantums){
 			curNode->next = queue->top;
 			queue->top = curNode;
-			queue->size++;
 		}
 		else{
 			t_node* temp = queue->top;
@@ -685,7 +720,8 @@ void addToReadyQueue(tcb* curTCB, t_queue* queue){
 			curNode->next = temp->next;
 			temp->next = curNode;
 		}
-	}	
+	}
+	queue->size++;	
 }
 
 void pauseTimer() {
