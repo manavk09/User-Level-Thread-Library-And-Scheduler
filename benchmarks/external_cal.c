@@ -87,6 +87,7 @@ void verify() {
 		}
 		fclose(f);
 	}
+	printf("Actual sum: %d\n", sum);
 }
 
 
@@ -126,20 +127,21 @@ int main(int argc, char **argv) {
  
 	for (i = 0; i < thread_num; ++i)
 		pthread_create(&thread[i], NULL, &external_calculate, &counter[i]);
+		
 	
 	signal(SIGABRT, sig_handler);
-	signal(SIGSEGV, sig_handler);
+	//signal(SIGSEGV, sig_handler);
+	
 
 	for (i = 0; i < thread_num; ++i)
 		pthread_join(thread[i], NULL);
-
 
         fprintf(stderr, "***************************\n");
 
         clock_gettime(CLOCK_REALTIME, &end);
 
         printf("Total run time: %lu micro-seconds\n",
-               (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000);
+               (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000);
 
 	pthread_mutex_destroy(&mutex);
 

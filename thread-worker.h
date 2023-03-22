@@ -53,8 +53,8 @@ typedef struct TCB {
 	enum status t_status;
 	// thread context
 	ucontext_t *t_context;
-	// thread stack
-	void *t_stack;
+	// // thread stack
+	// void *t_stack;
 	// thread priority
 	int t_priority; //highest num is highest priority 
 	// And more ...
@@ -146,7 +146,7 @@ void alertJoinThreads();
 
 t_node* getThread(worker_t id);
 
-int isMutexFree(worker_t mutex_id);
+int isMutexFree(worker_mutex_t *mutex_id);
 
 t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list);
 
@@ -178,6 +178,8 @@ long getMicroseconds(struct timespec timeSpec);
 static void sched_mlfq();
 
 static void sched_psjf();
+
+void printLM(t_mutexNode* list);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
