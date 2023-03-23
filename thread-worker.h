@@ -181,6 +181,8 @@ static void sched_psjf();
 
 void printLM(t_mutexNode* list);
 
+void updateThreadRuntime(tcb* tcb);
+
 #ifdef USE_WORKERS
 #define pthread_t worker_t
 #define pthread_mutex_t worker_mutex_t
