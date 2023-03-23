@@ -61,12 +61,17 @@ typedef struct TCB {
 	void *return_val;
 
 	//Quantums (Time slices for this thread)
-	int t_quantums;
+	unsigned int t_quantums;
 
 	//Time values
-	//struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
 
-	long arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	// long arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	unsigned int amount_quantum_used;
+	struct timespec last_scheduled;
+	// struct timespec first_scheduled;
+	// int prev_scheduled;
+
 
 	//ID of thread that this thread is waiting on
 	worker_t t_waitingId;
@@ -182,6 +187,9 @@ static void sched_psjf();
 void printLM(t_mutexNode* list);
 
 void updateThreadRuntime(tcb* tcb);
+
+void setTimer(int remaining);
+struct timespec diff_timespec(struct timespec endTime, struct timespec startTime);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
