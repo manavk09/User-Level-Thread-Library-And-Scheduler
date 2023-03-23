@@ -28,7 +28,7 @@
 #define QUANTUM 10000
 #define PRIORITY_BOOST_TIME 50000
 #define MLFQ_QUEUES_NUM 3
-#define MLFQ_QUEUES_MOVE_ALL_TOP_TIME 10
+//#define MLFQ_QUEUES_MOVE_ALL_TOP_TIME 10
 
 typedef uint worker_t;
 
@@ -178,6 +178,8 @@ long getMicroseconds(struct timespec timeSpec);
 static void sched_mlfq();
 
 static void sched_psjf();
+
+void updateThreadRuntime(tcb* tcb);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
