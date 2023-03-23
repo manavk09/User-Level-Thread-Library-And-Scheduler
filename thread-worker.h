@@ -66,7 +66,7 @@ typedef struct TCB {
 	//Time values
 	//struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
 
-	long arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
 
 	//ID of thread that this thread is waiting on
 	worker_t t_waitingId;
@@ -163,7 +163,7 @@ void printQueue();
 
 tcb* dequeueMLFQ();
 
-struct timespec getTimeDiff(struct timespec time1, struct timespec time0);
+//struct timespec getTimeDiff(struct timespec time1, struct timespec time0);
 
 void priorityBoost();
 
@@ -182,6 +182,10 @@ static void sched_psjf();
 void printLM(t_mutexNode* list);
 
 void updateThreadRuntime(tcb* tcb);
+
+struct timespec diff_timespec(struct timespec endTime, struct timespec startTime);
+
+struct timespec add_timespec(struct timespec time1, struct timespec time2);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
