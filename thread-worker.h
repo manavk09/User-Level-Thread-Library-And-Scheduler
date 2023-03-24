@@ -10,7 +10,7 @@
 #define _GNU_SOURCE
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_WORKERS macro */
-#define USE_WORKERS 1
+//#define USE_WORKERS 1
 
 /* include lib header files that you need here: */
 #include <unistd.h>
@@ -25,25 +25,24 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define QUANTUM 10000
-#define PRIORITY_BOOST_TIME 50000
-#define MLFQ_QUEUES_NUM 3
-#define MLFQ_QUEUES_MOVE_ALL_TOP_TIME 10
+#define QUANTUM 10000					// Quantum slice time in microseconds
+#define PRIORITY_BOOST_TIME 50000		// Time "S" before priority boost should happen
+#define MLFQ_QUEUES_NUM 3				// Number of queues in MLFQ
 
 typedef uint worker_t;
 
-enum status{
+enum status {
 	RUNNING,
 	READY,
 	BLOCKED_JOIN,
 	BLOCKED_MUTEX,
 	EXITED
-}status;
-enum mutex_status{
+} status;
+enum mutex_status {
 	INITIALIZED,
 	LOCKED,
 	UNLOCKED
-}mutex_status;
+} mutex_status;
 
 typedef struct TCB {
 	/* add important states in a thread control block */
@@ -53,29 +52,25 @@ typedef struct TCB {
 	enum status t_status;
 	// thread context
 	ucontext_t *t_context;
-	// // thread stack
-	// void *t_stack;
-	// thread priority
-	int t_priority; //highest num is highest priority 
+	// thread priority (higher number = higher priority)
+	int t_priority;
 	// And more ...
 	void *return_val;
 
-	//Quantums (Time slices for this thread)
+	//Quantums (Number of time slices completed for this thread)
 	unsigned int t_quantums;
 
-	//Time values
-	struct timespec arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	//Benchmarking statistics values
+	struct timespec arrivalTime, responseTime, turnaroundTime;
 
-	// long arrivalTime, responseTime, turnaroundTime, timeSinceQuantum, lastStart, lastEnd;
+	//Amount of quantum used since the last time thread was scheduled
 	unsigned int amount_quantum_used;
+
+	//Time when thread was last scheduled
 	struct timespec last_scheduled;
-	// struct timespec first_scheduled;
-	// int prev_scheduled;
 
-
-	//ID of thread that this thread is waiting on
+	//ID of thread or mutex that this thread is waiting on
 	worker_t t_waitingId;
-
 
 	// YOUR CODE HERE
 } tcb;
@@ -98,16 +93,18 @@ typedef struct t_node{
 	tcb *data;
 	struct t_node *next;
 } t_node;
+
 typedef struct t_mutexNode{
 	worker_mutex_t *data;
 	struct t_mutexNode *next;
 } t_mutexNode;
-//queue
+
+//Queue
 typedef struct t_queue{
 	int size;
 	t_node *top;
 	t_node *bottom;
-}t_queue;
+} t_queue;
 
 /* Function Declarations: */
 
@@ -137,59 +134,74 @@ int worker_mutex_unlock(worker_mutex_t *mutex);
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex);
 
-tcb* dequeue(t_queue* queue);
-
-void enqueue(tcb* tcb, t_queue* queue);
-
-void swap_to_scheduler();
-
+/* Selects which type of scheduler to use (MLFQ or PSJF). */
 static void schedule();
 
+/* PSJF Scheduler. */
+static void sched_psjf();
+
+/* MLFQ Scheduler. */
+static void sched_mlfq();
+
+/*
+Function called when timer goes off. Adjusts quantum and
+priority information for current thread.
+*/
+void swap_to_scheduler();
+
+/* Enqueue tcb to queue */
+void enqueue(tcb* tcb, t_queue* queue);
+
+/* Dequeue tcb from queue */
+tcb* dequeue(t_queue* queue);
+
+/* Dequeues tcb from MLFQ. */
+tcb* dequeueMLFQ();
+
+/* Adds tcb to end of linked list. */
 t_node* addToEndOfLinkedList(tcb* thread, t_node* list);
 
-void alertJoinThreads();
-
-t_node* getThread(worker_t id);
-
-int isMutexFree(worker_mutex_t *mutex_id);
-
+/* Adds mutex to end of list. */
 t_mutexNode* addToEndOfMutexLL(worker_mutex_t* mutex, t_mutexNode* list);
 
+/* Unblocks threads that are joined on the current tcb. */
+void alertJoinThreads();
+
+/* Unblocks threads that are mutex locked by the current tcb. */
 void alertMutexThreads(worker_t mutex_id);
 
+/* Returns thread given it's id. */
+t_node* getThread(worker_t id);
+
+/* Checks if mutex is free. Returns 1 if free, 0 if not free. */
+int isMutexFree(worker_mutex_t *mutex_id);
+
+/* Adds tcb to ready queue.*/
 void addToReadyQueue(tcb* curTCB, t_queue *queue);
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
 
-void printLL(t_node* list);
-
-void printQueue();
-
-tcb* dequeueMLFQ();
-
-struct timespec getTimeDiff(struct timespec time1, struct timespec time0);
-
+/* Sets priority of all threads to the highest priority.*/
 void priorityBoost();
 
-void insertToMLFQ(tcb* thread);
+/* Set timer to run for time 'remaining'. */
+void setTimer(int remaining);
 
-void resumeTimer();
-
-void pauseTimer();
-
+/* Convert timespec to microseconds. */
 long getMicroseconds(struct timespec timeSpec);
 
-static void sched_mlfq();
+/* Gets the difference between two timespecs. */
+struct timespec diff_timespec(struct timespec endTime, struct timespec startTime);
 
-static void sched_psjf();
+/* Prints linked list. */
+void printLL(t_node* list);
 
+/* Prints mutex list. */
 void printLM(t_mutexNode* list);
 
-void updateThreadRuntime(tcb* tcb);
-
-void setTimer(int remaining);
-struct timespec diff_timespec(struct timespec endTime, struct timespec startTime);
+/* Prints queue. */
+void printQueue(t_queue* queue);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
