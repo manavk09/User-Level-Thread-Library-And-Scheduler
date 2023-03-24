@@ -137,7 +137,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex);
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex);
 
-t_node* dequeue(t_queue* queue);
+tcb* dequeue(t_queue* queue);
 
 void enqueue(tcb* tcb, t_queue* queue);
 
