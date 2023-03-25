@@ -31,6 +31,7 @@ worker_t mutex_id = 0;
 
 ucontext_t* main_ctx;
 ucontext_t* scheduler_ctx;
+int exit_created = 0;
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 // YOUR CODE HERE
@@ -122,6 +123,11 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		memset (&sa, 0, sizeof (sa));
 		sa.sa_handler = &swap_to_scheduler;
 		sigaction (SIGPROF, &sa, NULL);
+	}
+
+	if(exit_created == 0){
+		atexit(exitFunction);
+		exit_created = -1;
 	}
     return 0;
 };
@@ -363,16 +369,14 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 	if(curr->data->mutex_id == mutex->mutex_id){
 		mutex_list = curr->next;
 		//doo the free stuff
-		//free(curr);
-		//resumeTimer();
+		free(curr);
 		return 0;
 	}
 	while(curr->next != NULL){
 		if(curr->next->data->mutex_id == mutex->mutex_id){
 			t_mutexNode* temp = curr->next;
 			curr->next = curr->next->next;
-			//free the stuff
-			//free(temp);
+			free(temp);
 			break;
 		}
 		else{
@@ -743,4 +747,31 @@ void printQueue(t_queue* queue) {
 		printf("Printing Queue: Thread: %d with status %d with priority %d\n", temp->data->t_Id, temp->data->t_status, temp->data->t_priority);
 		temp = temp->next;
 	}
+}
+void exitFunction(){
+	#ifdef MLFQ
+		//freeing mlfq
+		for(int i = 0; i < MLFQ_QUEUES_NUM; i++) {
+			free(mlfq[i]);
+		}
+		
+	#else
+		//freeing ready Queue
+		free(readyQueue);
+	#endif
+	//freeing the mutex list
+	free(mutex_list);
+	/*
+		freeing each tcb that we malloced at create 
+	*/
+	t_node *temp = threadsList;
+	while(temp != NULL){
+		t_node *next = temp->next;
+		free(temp->data->t_context->uc_stack.ss_sp);
+		free(temp->data->t_context);
+		free(temp->data);
+		free(temp);
+		temp = next;
+	}
+	
 }

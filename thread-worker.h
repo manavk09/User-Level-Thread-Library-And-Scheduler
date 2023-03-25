@@ -203,6 +203,9 @@ void printLM(t_mutexNode* list);
 /* Prints queue. */
 void printQueue(t_queue* queue);
 
+/*exit function to free everything*/
+void exitFunction();
+
 #ifdef USE_WORKERS
 #define pthread_t worker_t
 #define pthread_mutex_t worker_mutex_t
