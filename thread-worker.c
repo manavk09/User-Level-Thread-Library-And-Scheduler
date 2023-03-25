@@ -223,6 +223,21 @@ int worker_join(worker_t thread, void **value_ptr) {
 	if(getThread(thread)->data->t_status != EXITED) {
 		currTcb->t_waitingId = thread;
 		currTcb->t_status = BLOCKED_JOIN;
+
+		struct timespec curr_time;
+		clock_gettime(CLOCK_REALTIME, &curr_time);
+
+		currTcb->amount_quantum_used += (curr_time.tv_sec - currTcb->last_scheduled.tv_sec) * 1000000 + 
+										(curr_time.tv_nsec - currTcb->last_scheduled.tv_nsec) / 1000;
+		
+		if(currTcb->amount_quantum_used >= QUANTUM){
+			currTcb->t_quantums++;
+			currTcb->amount_quantum_used = 0;
+
+			priorityBoostCounter++;
+			currTcb->t_priority == 0 ? currTcb->t_priority = 0 : currTcb->t_priority--;
+		}
+
 		tot_cntx_switches++;
 		swapcontext(currTcb->t_context, scheduler_ctx);
 	}
@@ -278,6 +293,21 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
 		while(isMutexFree(mutex) != 1){
 			currTcb->t_status = BLOCKED_MUTEX;
 			currTcb->t_waitingId = mutex->mutex_id;
+
+			struct timespec curr_time;
+			clock_gettime(CLOCK_REALTIME, &curr_time);
+
+			currTcb->amount_quantum_used += (curr_time.tv_sec - currTcb->last_scheduled.tv_sec) * 1000000 + 
+											(curr_time.tv_nsec - currTcb->last_scheduled.tv_nsec) / 1000;
+			
+			if(currTcb->amount_quantum_used >= QUANTUM){
+				currTcb->t_quantums++;
+				currTcb->amount_quantum_used = 0;
+
+				priorityBoostCounter++;
+				currTcb->t_priority == 0 ? currTcb->t_priority = 0 : currTcb->t_priority--;
+			}
+
 			tot_cntx_switches++;
 			swapcontext(currTcb->t_context,scheduler_ctx);
 		}
@@ -669,8 +699,8 @@ void setTimer(int remaining){
 	setitimer(ITIMER_PROF, &timer, NULL);
 }
 
-long getMicroseconds(struct timespec timeSpec) {
-	return timeSpec.tv_sec*1000000 + timeSpec.tv_nsec/1000;
+double getMicroseconds(struct timespec timeSpec) {
+	return timeSpec.tv_sec*1000000 + timeSpec.tv_nsec/(double)1000;
 }
 
 struct timespec diff_timespec(struct timespec endTime, struct timespec startTime) {
